@@ -1,0 +1,4 @@
+getpass
+requests
+bs4
+configparser

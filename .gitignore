@@ -1,1 +1,5 @@
 *.pyc
+secret
+.DS_Store
+venv
+.idea
