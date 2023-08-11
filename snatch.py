@@ -1,10 +1,10 @@
 import json
 import random
 import sys
+from configparser import ConfigParser
 from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
-from configparser import ConfigParser
 from requests import get, post
 
 from logger_inner import login
@@ -74,7 +74,7 @@ def _reserve(period, _floor, _day_offset=0):
     seat_numbers = get_free_seat_numbers(relevant_row)
 
     if len(seat_numbers) == 0:
-        print(f"No seat in {_floor}")
+        debugprint(f"No seat in {_floor}")
         return False
 
     desc = get_desc_from_period(period)
@@ -115,7 +115,7 @@ Scrape a certain website for free seats and then grab one
 '''
 if __name__ == '__main__':
     cfg_path = sys.argv[1] or 'resources/config_morning.cfg'
-    print(cfg_path)
+    debugprint("config path: ", cfg_path)
     cfg_pars.read(cfg_path)
 
     daytime = None
@@ -133,7 +133,7 @@ if __name__ == '__main__':
             print("goodbye")
             exit(0)
 
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 2:
         secret = open(sys.argv[2], 'r').read()
     else:
         secret = None
