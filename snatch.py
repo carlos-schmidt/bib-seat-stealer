@@ -3,6 +3,7 @@ import random
 import sys
 from configparser import ConfigParser
 from datetime import datetime, timedelta
+from time import sleep, time
 
 from bs4 import BeautifulSoup
 from requests import get, post
@@ -13,7 +14,7 @@ base_url = 'https://raumbuchung.bibliothek.kit.edu/sitzplatzreservierung'
 headers = {'User-Agent': 'Mozilla/5.0'}
 floors: dict = json.load(open('resources/floors.json'))
 periods: dict = json.load(open('resources/periods.json'))
-
+periods_inv = dict((v, k) for k, v in periods.items())
 cfg_pars = ConfigParser()
 login_name: str
 login_cookie: str
@@ -90,24 +91,33 @@ def _reserve(period, _floor, _day_offset=0):
     return False
 
 
-def continue_booking(daytime='vormittags', day_offset=0, floor=None):
-    period = 0
-    if 'v' in daytime:
-        period = 0
-    elif 'nachm' in daytime:
-        period = 1
-    elif 'abends' in daytime:
-        period = 2
-    elif 'nacht' in daytime:
-        period = 3
-    if floor is None:
-        for floorno in floors.keys():
-            if _reserve(period, floorno, day_offset):
-                return  # Found seat
-        print("no free seats found for your query... goodbye")
-    else:
-        if not _reserve(period, floor, day_offset):
-            print("no free seats found for your query... goodbye")
+def get_period(daytime) -> int:
+    return int(periods_inv.get(daytime))
+
+
+def continue_booking(daytime='vormittags', day_offset=0, floor=None, tries=1, multiple_tries_period=1000):
+    period = get_period(daytime)
+    print(period)
+
+    _tries = int(tries)
+
+    while _tries > 0 or _tries == -1:
+        x = time()
+        if floor is None:
+            for floorno in floors.keys():
+                if _reserve(period, floorno, day_offset):
+                    return  # Found seat
+            print("no free seats found for your query...")
+        else:
+            if not _reserve(period, floor, day_offset):
+                print("no free seats found for your query...")
+            else:
+                return # Found seat
+        print(f"trying {_tries} more times...")
+
+        sleep((time() - x + int(multiple_tries_period))/1000)
+        _tries -= 1
+    print("nothing found. goodbye")
 
 
 '''
@@ -121,11 +131,15 @@ if __name__ == '__main__':
     daytime = None
     floor = None
     day_offset = 0
+    tries = 1
+    multiple_tries_period = 1000  # ms
     try:
         daytime = cfg_pars['bib']['daytime']
         floor = cfg_pars['bib']['preferredFloor']
         day_offset = cfg_pars['bib']['daysOffset']
         debug = cfg_pars['bib']['debug']
+        tries = cfg_pars['bib']['tries']
+        multiple_tries_period = cfg_pars['bib']['multipleTriesPeriod']
     except KeyError as keyError:
         debugprint("KeyError", keyError)
         yn = input('Failed at reading above key... go on? [*/n]')
@@ -139,6 +153,6 @@ if __name__ == '__main__':
         secret = None
     login_cookie, login_name = login(secret)
     if login_cookie is not None:
-        continue_booking(daytime=daytime, day_offset=day_offset, floor=floor)
+        continue_booking(daytime, day_offset, floor, tries, multiple_tries_period)
     else:
         print("Login failed... goodbye")
