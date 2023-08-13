@@ -22,6 +22,18 @@ date = datetime.now()  # Tomorrow is for losers
 debug = True
 
 
+def goodbye():
+    msg = """\n
+                          .______.                 
+   ____   ____   ____   __| _/\_ |__ ___.__. ____  
+  / ___\ /  _ \ /  _ \ / __ |  | __ <   |  |/ __ \ 
+ / /_/  >  <_> |  <_> ) /_/ |  | \_\ \___  \  ___/ 
+ \___  / \____/ \____/\____ |  |___  / ____|\___  >
+/_____/                    \/      \/\/         \/
+          """
+    print(msg)
+
+
 def debugprint(*args):
     if debug:
         print(args)
@@ -86,7 +98,8 @@ def _reserve(period, _floor, _day_offset=0):
     for seat_number in seat_numbers:
         response = actually_reserve(desc, day, seconds, floorno, seat_number, date.month, date.year)
         if response.status_code == 200:
-            print(f"Reserved: {desc}{_floor} at {year}.{month}.{day}\ngoodbye")
+            print(f"Reserved: {desc}{_floor} at {year}.{month}.{day}")
+            goodbye()
             return True
     return False
 
@@ -100,24 +113,28 @@ def continue_booking(daytime='vormittags', day_offset=0, floor=None, tries=1, mu
     print(period)
 
     _tries = int(tries)
-
-    while _tries > 0 or _tries == -1:
-        x = time()
-        if floor is None:
-            for floorno in floors.keys():
-                if _reserve(period, floorno, day_offset):
-                    return  # Found seat
-            print("no free seats found for your query...")
-        else:
-            if not _reserve(period, floor, day_offset):
+    try:
+        while _tries > 0 or _tries == -1:
+            x = time()
+            if floor is None:
+                for floorno in floors.keys():
+                    if _reserve(period, floorno, day_offset):
+                        return  # Found seat
                 print("no free seats found for your query...")
             else:
-                return # Found seat
-        print(f"trying {_tries} more times...")
+                if not _reserve(period, floor, day_offset):
+                    print("no free seats found for your query...")
+                else:
+                    return  # Found seat
+            print(f"trying {_tries} more times...")
 
-        sleep((time() - x + int(multiple_tries_period))/1000)
-        _tries -= 1
-    print("nothing found. goodbye")
+            sleep((time() - x + int(multiple_tries_period)) / 1000)
+            _tries -= 1
+        print("nothing found.")
+        goodbye()
+    except KeyboardInterrupt as _:
+        print("\nSnatcher was interrupted.")
+        goodbye()
 
 
 '''
@@ -144,7 +161,7 @@ if __name__ == '__main__':
         debugprint("KeyError", keyError)
         yn = input('Failed at reading above key... go on? [*/n]')
         if 'n' in yn:
-            print("goodbye")
+            goodbye()
             exit(0)
 
     if len(sys.argv) > 2:
@@ -155,4 +172,5 @@ if __name__ == '__main__':
     if login_cookie is not None:
         continue_booking(daytime, day_offset, floor, tries, multiple_tries_period)
     else:
-        print("Login failed... goodbye")
+        print("Login failed...")
+        goodbye()
