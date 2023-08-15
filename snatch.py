@@ -19,7 +19,7 @@ cfg_pars = ConfigParser()
 login_name: str
 login_cookie: str
 date = datetime.now()  # Tomorrow is for losers
-debug = True
+debug = False
 
 
 def goodbye():
@@ -32,11 +32,6 @@ def goodbye():
 /_____/                    \/      \/\/         \/
           """
     print(msg)
-
-
-def debugprint(*args):
-    if debug:
-        print(args)
 
 
 def fetch(url, floor, date: datetime):
@@ -87,7 +82,6 @@ def _reserve(period, _floor, _day_offset=0):
     seat_numbers = get_free_seat_numbers(relevant_row)
 
     if len(seat_numbers) == 0:
-        debugprint(f"No seat in {_floor}")
         return False
 
     desc = get_desc_from_period(period)
@@ -108,28 +102,36 @@ def get_period(daytime) -> int:
     return int(periods_inv.get(daytime))
 
 
-def continue_booking(daytime='vormittags', day_offset=0, floor=None, tries=1, multiple_tries_period=1000):
+def compute_initial_timeout(_snatch_time):
+    _zero_timeout = datetime.combine(date.today(), datetime.strptime('0:0:0', '%H:%M:%S').time())
+    if _snatch_time is None:
+        return _zero_timeout - _zero_timeout
+    # combine builds a datetime, that can be subtracted.
+    snatch_time_obj = datetime.combine(date.today(), datetime.strptime(_snatch_time, '%H:%M:%S').time())
+    initial_timeout = (snatch_time_obj - datetime.now())
+    if initial_timeout.total_seconds() < 0:
+        return _zero_timeout - _zero_timeout
+    return initial_timeout
+
+
+def continue_booking(daytime, day_offset, floor, tries, multiple_tries_period):
     period = get_period(daytime)
     print(period)
 
-    _tries = int(tries)
+    _tries = 0
     try:
-        while _tries > 0 or _tries == -1:
+        while _tries < int(tries) or int(tries) == -1:
             x = time()
             if floor is None:
-                for floorno in floors.keys():
-                    if _reserve(period, floorno, day_offset):
+                for floor_no in floors.keys():
+                    if _reserve(period, floor_no, day_offset):
                         return  # Found seat
-                print("no free seats found for your query...")
-            else:
-                if not _reserve(period, floor, day_offset):
-                    print("no free seats found for your query...")
-                else:
-                    return  # Found seat
-            print(f"trying {_tries} more times...")
+            elif _reserve(period, floor, day_offset):
+                return  # Found seat
+            print(f'tried {_tries}/{tries} times...', end='\r')
 
             sleep((time() - x + int(multiple_tries_period)) / 1000)
-            _tries -= 1
+            _tries += 1
         print("nothing found.")
         goodbye()
     except KeyboardInterrupt as _:
@@ -141,8 +143,7 @@ def continue_booking(daytime='vormittags', day_offset=0, floor=None, tries=1, mu
 Scrape a certain website for free seats and then grab one
 '''
 if __name__ == '__main__':
-    cfg_path = sys.argv[1] or 'resources/config_morning.cfg'
-    debugprint("config path: ", cfg_path)
+    cfg_path = sys.argv[1] if len(sys.argv) > 1 else 'config_morning.cfg'
     cfg_pars.read(cfg_path)
 
     daytime = None
@@ -150,6 +151,7 @@ if __name__ == '__main__':
     day_offset = 0
     tries = 1
     multiple_tries_period = 1000  # ms
+    snatch_time = None
     try:
         daytime = cfg_pars['bib']['daytime']
         floor = cfg_pars['bib']['preferredFloor']
@@ -157,8 +159,8 @@ if __name__ == '__main__':
         debug = cfg_pars['bib']['debug']
         tries = cfg_pars['bib']['tries']
         multiple_tries_period = cfg_pars['bib']['multipleTriesPeriod']
+        snatch_time = cfg_pars['bib']['snatchTime']
     except KeyError as keyError:
-        debugprint("KeyError", keyError)
         yn = input('Failed at reading above key... go on? [*/n]')
         if 'n' in yn:
             goodbye()
@@ -168,6 +170,12 @@ if __name__ == '__main__':
         secret = open(sys.argv[2], 'r').read()
     else:
         secret = None
+
+    _initial_timeout = compute_initial_timeout(snatch_time)
+
+    print(f'(Current time: {datetime.now().strftime("%H:%M:%S")}) Waking up in {_initial_timeout}')
+    sleep(_initial_timeout.total_seconds())
+
     login_cookie, login_name = login(secret)
     if login_cookie is not None:
         continue_booking(daytime, day_offset, floor, tries, multiple_tries_period)

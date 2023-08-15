@@ -3,3 +3,4 @@ secret
 .DS_Store
 venv
 .idea
+./resources/COOKIE
