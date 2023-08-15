@@ -130,7 +130,13 @@ def _reserve(period, _floor, _day_offset=0):
 
     random.shuffle(seat_numbers)
     for seat_number in seat_numbers:
-        response = actually_reserve(desc, day, seconds, floorno, seat_number, date.month, date.year)
+        try:
+            response = actually_reserve(desc, day, seconds, floorno, seat_number, date.month, date.year)
+        except OSError as err:
+            print('\nReceived (most likely) a connection error!', str(err))
+            print('Continuing though. Might be that multiple reservations are being made now')
+            continue
+
         if response.status_code == 200:
             print(f"Reserved: {desc}{_floor} at {year}.{month}.{day}")
             goodbye()
