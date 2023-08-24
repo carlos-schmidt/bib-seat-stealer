@@ -1,3 +1,4 @@
+import time
 from getpass import getpass
 
 import requests
@@ -28,7 +29,6 @@ def read_cookie():
         return None, None
 
 
-
 def debugprint(*args):
     if debug:
         print(args)
@@ -42,7 +42,18 @@ def check_valid(cookie, username):
     return username in site
 
 
-def login(secret: str = None):
+def login(secret: str = None, power_nap_fn=time.sleep, timeout=0):
+    """
+    Logs you in to Raumbuchungssystem.
+
+    :param secret: username and password separated by '\n'
+    :param power_nap_fn: function to use to sleep b4 logging in
+    :param timeout: seconds until login
+    :return:
+    """
+    power_nap_fn(timeout)
+    print("logging you in")
+
     _url = base_url + '/admin.php?'
 
     cookie, username = read_cookie()

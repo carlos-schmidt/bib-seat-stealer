@@ -1,3 +1,4 @@
+import ast
 import json
 import random
 import sys
@@ -57,9 +58,8 @@ def salute(till):
     ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠈⢿⢿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
     ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
         ⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣥⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣥⣤⣤⣤⣤⣤⣤
-        Current time is {datetime.now().strftime('%H:%M')}. Waking up in {':'.join(str(till).split(':')[:2])}h, soldier!
-    """
-    print(msg)
+        Current time is {datetime.now().strftime('%H:%M')}. Waking up in {':'.join(str(till).split(':')[:2])}h, soldier!"""
+    print(msg, end="\r")
 
 
 def goodbye():
@@ -75,8 +75,11 @@ def goodbye():
 
 
 def fetch(url, floor, date: datetime):
-    return get(url, params={'area': floor, 'year': date.year, 'month': date.month, 'day': date.day},
-               headers=headers)
+    try:
+        return get(url, params={'area': floor, 'year': date.year, 'month': date.month, 'day': date.day},
+                   headers=headers)
+    except OSError as _:
+        return None
 
 
 def get_desc_from_period(period):
@@ -112,8 +115,9 @@ def calc_date(_day_offset, period):
 
 def _reserve(period, _floor, _day_offset=0):
     floorno = floors[_floor]
-
-    page = fetch(base_url + '/day.php', floorno, date)
+    page = None
+    while page is None: # Even this fails at 13:30 and 8:30
+        page = fetch(base_url + '/day.php', floorno, date)
     souped = BeautifulSoup(page.text, 'html.parser')
 
     daytimes = [x for x in souped.find_all('tr', {'class': ['even_row', 'odd_row']})]
@@ -133,8 +137,8 @@ def _reserve(period, _floor, _day_offset=0):
         try:
             response = actually_reserve(desc, day, seconds, floorno, seat_number, date.month, date.year)
         except OSError as err:
-            print('\nReceived (most likely) a connection error!', str(err))
-            print('Continuing though. Might be that multiple reservations are being made now')
+            print('\nSYSTEM OVERLOAD!', str(err))
+            print('Continuing though. Might be that multiple reservations are being made for you now')
             continue
 
         if response.status_code == 200:
@@ -144,8 +148,8 @@ def _reserve(period, _floor, _day_offset=0):
     return False
 
 
-def get_period(daytime) -> int:
-    return int(periods_inv.get(daytime))
+def get_period(_daytime) -> int:
+    return int(periods_inv.get(_daytime))
 
 
 def compute_initial_timeout(_snatch_time):
@@ -160,7 +164,7 @@ def compute_initial_timeout(_snatch_time):
     return initial_timeout
 
 
-def continue_booking(daytime, day_offset, floor, tries, multiple_tries_period):
+def continue_booking(daytime, day_offset, preferred_floors, tries, multiple_tries_period):
     period = get_period(daytime)
     print(period)
 
@@ -168,12 +172,14 @@ def continue_booking(daytime, day_offset, floor, tries, multiple_tries_period):
     try:
         while _tries < int(tries) or int(tries) == -1:
             x = time()
-            if floor is None:
-                for floor_no in floors.keys():
-                    if _reserve(period, floor_no, day_offset):
+            if preferred_floors is None:
+                for _floor in floors.keys():
+                    if _reserve(period, _floor, day_offset):
                         return  # Found seat
-            elif _reserve(period, floor, day_offset):
-                return  # Found seat
+            else:
+                for _floor in preferred_floors:
+                    if _reserve(period, _floor, day_offset):
+                        return  # Found seat
             print(f'tried {_tries}/{tries} times...', end='\r')
 
             sleep((time() - x + int(multiple_tries_period)) / 1000)
@@ -185,6 +191,25 @@ def continue_booking(daytime, day_offset, floor, tries, multiple_tries_period):
         goodbye()
 
 
+def power_nap(_snatch_time):
+    """
+    Take 10-minute-power-naps until 60 seconds before go time
+    """
+    _initial_timeout = compute_initial_timeout(_snatch_time)
+
+    if _snatch_time is None or _initial_timeout.total_seconds() < 61:
+        return
+
+    while _initial_timeout.total_seconds() > 600:
+        print(
+            f"\tCurrent time is {datetime.now().strftime('%H:%M')}. Waking up in {':'.join(str(_initial_timeout).split(':')[:2])}h, soldier!",
+            end='\r')
+        sleep(600)  # 10 minutes
+        _initial_timeout = compute_initial_timeout(_snatch_time)
+    sleep(_initial_timeout.total_seconds() - 60)
+    return
+
+
 '''
 Scrape a certain website for free seats and then grab one
 '''
@@ -193,14 +218,14 @@ if __name__ == '__main__':
     cfg_pars.read(cfg_path)
 
     daytime = None
-    floor = None
+    preferred_floors = None
     day_offset = 0
     tries = 1
     multiple_tries_period = 1000  # ms
     snatch_time = None
     try:
         daytime = cfg_pars['bib']['daytime']
-        floor = cfg_pars['bib']['preferredFloor']
+        preferred_floors = ast.literal_eval(cfg_pars['bib']['preferredFloor'])
         day_offset = cfg_pars['bib']['daysOffset']
         debug = cfg_pars['bib']['debug']
         tries = cfg_pars['bib']['tries']
@@ -217,15 +242,17 @@ if __name__ == '__main__':
     else:
         secret = None
 
-    _initial_timeout = compute_initial_timeout(snatch_time)
+    initial_timeout = compute_initial_timeout(snatch_time)
 
-    if _initial_timeout.total_seconds() > 3:
-        salute(_initial_timeout)
-    sleep(_initial_timeout.total_seconds())
+    if initial_timeout.total_seconds() > 3:
+        salute(initial_timeout)
 
-    login_cookie, login_name = login(secret)
+    login_cookie, login_name = login(secret, power_nap, snatch_time)
+
+    sleep(59 if initial_timeout.total_seconds() - 60 > 0 else 0)
+
     if login_cookie is not None:
-        continue_booking(daytime, day_offset, floor, tries, multiple_tries_period)
+        continue_booking(daytime, day_offset, preferred_floors, tries, multiple_tries_period)
     else:
         print("Login failed...")
         goodbye()
